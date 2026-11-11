@@ -199,6 +199,10 @@ table.tb{width:100%;border-collapse:collapse}
 .stackbar i{display:block;width:100%}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
 .legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:4px;background:var(--c);margin-right:6px;vertical-align:-1px}
+.ask{margin-top:22px;border-style:dashed;border-color:var(--coach)}
+.ask h3{font-size:1.05rem;display:flex;align-items:center;gap:10px}
+.ask .avatar{width:32px;height:32px;flex-basis:32px;border-radius:10px}.ask .avatar svg{width:18px;height:18px}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:500;z-index:50;max-width:min(92vw,520px);box-shadow:var(--shadow)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -851,7 +855,67 @@ function viewLesson(){
   } else if(LS.idx<total && beatDone(LS.idx-1)){
     h += `<div class="cont"><button class="btn primary" data-action="cont">Continue</button></div>`;
   }
-  return h;
+  return h + askPanel();
+}
+
+/* ============ ASK CLAUDE (opens claude.ai with context prefilled) ============ */
+const strip = h => { const d=document.createElement("div"); d.innerHTML=h; return (d.textContent||"").replace(/\s+/g," ").trim(); };
+const inLessonNow = () => !!(LS && byId[LS.id].b===S.tab);
+function askPanel(){
+  let extra = "";
+  if(inLessonNow()){
+    const i=LS.idx-1, b=LESSONS[LS.id].beats[i], st=LS.ch[i];
+    extra = `<button class="btn sm" data-action="ask" data-preset="Explain this idea again in a different way, with a new analogy.">Explain it another way</button><button class="btn sm" data-action="ask" data-preset="Give me one more practice question on this topic, slightly harder, and check my answer.">Another practice question</button>`;
+    if(b.k==="sql" && st && !st.passed) extra += `<button class="btn sm" data-action="ask" data-preset="Why is my query wrong? Give me a hint first, not the full answer.">Why is my query wrong?</button>`;
+  } else if(S.tab==="sql" && sqlView==="sandbox"){
+    extra = `<button class="btn sm" data-action="ask" data-preset="Explain what my query does, step by step.">Explain my query</button><button class="btn sm" data-action="ask" data-preset="Why is my query not working? Give me a hint first.">Fix my query</button>`;
+  }
+  return `<div class="card ask"><h3>${AVATAR}Have a question? Ask Claude</h3>
+    <p class="muted small" style="margin:6px 0 10px">Opens Claude in a new tab with ${inLessonNow()?"this lesson, your work and your question":"your question and your study plan"} already typed in. Just press send there.</p>
+    <div class="addrow" style="margin-top:0"><input type="text" id="ask-q" placeholder="Type your question" aria-label="Your question for Claude" data-enter="ask"><button class="btn coach" data-action="ask">Ask Claude</button></div>
+    ${extra?`<div class="row" style="margin-top:10px">${extra}</div>`:""}</div>`;
+}
+function buildAskPrompt(question){
+  const cut = (t,n) => t.length>n ? t.slice(0,n)+"…" : t;
+  let p = "You are my patient tutor for data analytics (SQL, Python, data modeling, analytics). Teaching rules: one concept at a time, start with a simple real-world analogy, define every technical term in plain English, keep it short, and end with one quick check-in question, then wait for my answer before moving on.\n\n";
+  if(inLessonNow()){
+    const t=byId[LS.id], L=LESSONS[LS.id], i=LS.idx-1, b=L.beats[i], st=LS.ch[i];
+    p += `I am studying: ${BUCKETS[t.b].label} - ${t.n}.\nKey idea of the lesson: ${L.key}\n`;
+    if(b.k==="sql"){
+      syncEditor(i);
+      p += `Current exercise: ${strip(b.prompt)}\n`;
+      if(b.tables) p += `Tables: ${b.tables.map(x=>x+"("+SCHEMA[x]+")").join("; ")}\nDatabase: SQLite.\n`;
+      if(st && st.val.trim()) p += `My query so far:\n${cut(st.val.trim(),500)}\n`;
+      if(st && st.err) p += `Error: ${cut(st.err,200)}\n`;
+      if(st && st.fb && !st.fb.ok) p += `Feedback I got: ${cut(strip(st.fb.msg),250)}\n`;
+    } else if(b.k==="mc"){
+      p += `Current check-in question: ${strip(b.prompt)}${b.code?"\n"+b.code:""}\n`;
+    }
+  } else if(S.tab==="sql" && sqlView==="sandbox"){
+    const ta=document.getElementById("sb"); if(ta) SB.sql=ta.value;
+    p += `I am practicing SQL in a SQLite sandbox.\nMy query:\n${cut(SB.sql.trim(),500)}\n`;
+    if(SB.err) p += `Error: ${cut(SB.err,200)}\n`;
+  } else {
+    const nx=nextLessons(1)[0];
+    p += `I am on a 10-week self-study plan${nx?`. My next topic is: ${nx.n}`:""}.\n`;
+  }
+  p += `\nMy question: ${question}`;
+  return p;
+}
+function toast(text){
+  document.querySelectorAll(".toast").forEach(x=>x.remove());
+  const d=document.createElement("div"); d.className="toast"; d.setAttribute("role","status"); d.textContent=text; document.body.appendChild(d);
+  setTimeout(()=>d.remove(), 5000);
+}
+function doAsk(preset){
+  const inp=document.getElementById("ask-q");
+  const q = preset || (inp && inp.value.trim()) || (inLessonNow() ? "Explain this idea again in a different way, with a new analogy." : "");
+  if(!q){ if(inp) inp.focus(); toast("Type your question first."); return; }
+  const prompt = buildAskPrompt(q);
+  window.open("https://claude.ai/new?q="+encodeURIComponent(prompt), "_blank", "noopener");
+  try{ navigator.clipboard.writeText(prompt).then(()=>toast("Opening Claude. Your question is also copied, so paste it if the box is empty."), ()=>toast("Opening Claude in a new tab.")); }
+  catch(e){ toast("Opening Claude in a new tab."); }
+  if(inp) inp.value="";
 }
 
 /* ============ VIEWS ============ */
@@ -885,6 +949,7 @@ function viewCoach(){
   </div>
   <div class="card" style="margin-top:14px"><h3 style="margin-bottom:6px">Up next</h3>${nxt.length? nxt.map(topicRow).join("") : `<p class="empty">Nothing left. Nice.</p>`}</div>
   ${struggled.length?`<div class="card" style="margin-top:14px"><h3 style="margin-bottom:2px">Worth a second look</h3><p class="muted small" style="margin:0 0 4px">These took several tries. Replaying them is the fastest way to lock them in.</p>${struggled.map(topicRow).join("")}</div>`:""}
+  ${askPanel()}
   <div class="card" style="margin-top:14px"><h3>How the coach teaches</h3><p class="muted" style="margin:6px 0 0">Every lesson is one small idea: a real-world analogy, the terms in plain English, a worked example, then a challenge you solve. You get feedback after every attempt, hints when you ask, and the solution after two misses. SQL runs against a practice database right in your browser.</p></div>`;
 }
 function viewToday(){
@@ -944,7 +1009,7 @@ function viewSandbox(){
     <div class="row" style="margin-bottom:8px">${chips}</div>
     <div class="editor" style="margin:0"><textarea id="sb" data-input="sb" spellcheck="false" style="min-height:150px" aria-label="Sandbox SQL">${esc(SB.sql)}</textarea><div class="row"><button class="btn primary" data-action="sbRun">Run</button></div></div>
     <div style="margin-top:6px">${SB.err?`<div class="err" style="margin-left:0">${esc(SB.err)}</div>`:""}${SB.res?resultTable(SB.res).replace('class="rt"','class="rt" style="margin-left:0"'):""}</div>
-    <div class="tbls" style="margin-top:12px">${Object.entries(SCHEMA).map(([t,c])=>`<div><code>${t}</code> (${c})</div>`).join("")}</div></div>`;
+    <div class="tbls" style="margin-top:12px">${Object.entries(SCHEMA).map(([t,c])=>`<div><code>${t}</code> (${c})</div>`).join("")}</div></div>${askPanel()}`;
 }
 function viewPractice(){
   const counters=PRACTICE_SITES.map(s=>{ const n=S.practice[s.id]||0;
@@ -1082,6 +1147,7 @@ document.addEventListener("click", e=>{
     case "sqlView": sqlView=el.dataset.v; render(); break;
     case "sbTable": SB.sql=`SELECT * FROM ${el.dataset.t};`; SB.res=null; SB.err=null; render(); if(SQLMOD) runSandbox(); break;
     case "sbRun": runSandbox(); break;
+    case "ask": doAsk(el.dataset.preset); break;
   }
 });
 function syncEditor(i){ const ta=document.getElementById("ed-"+i); if(ta) LS.ch[i].val=ta.value; }
@@ -1124,6 +1190,7 @@ document.addEventListener("keydown", e=>{
   const el=e.target.closest("[data-enter]"); if(!el) return;
   if(el.dataset.enter==="addTask") addTask(el.dataset.cat);
   if(el.dataset.enter==="addApp") addApp();
+  if(el.dataset.enter==="ask") doAsk();
 });
 function addTask(cat){
   const inp=document.getElementById("new-"+cat), mins=document.getElementById("min-"+cat), title=inp.value.trim();

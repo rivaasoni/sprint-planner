@@ -199,6 +199,10 @@ table.tb{width:100%;border-collapse:collapse}
 .stackbar i{display:block;width:100%}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
 .legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:4px;background:var(--c);margin-right:6px;vertical-align:-1px}
+.ask{margin-top:22px;border-style:dashed;border-color:var(--coach)}
+.ask h3{font-size:1.05rem;display:flex;align-items:center;gap:10px}
+.ask .avatar{width:32px;height:32px;flex-basis:32px;border-radius:10px}.ask .avatar svg{width:18px;height:18px}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:500;z-index:50;max-width:min(92vw,520px);box-shadow:var(--shadow)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -251,6 +255,19 @@ const TOPICS = [
   {id:"dm-4", b:"dm", w:6, n:"Grain, normalization, snowflake schema", tip:"Grain = what one fact row represents"},
   {id:"dm-5", b:"dm", w:7, n:"Slowly changing dimensions", tip:"Type 1 overwrites. Type 2 keeps history"},
   {id:"dm-6", b:"dm", w:7, n:"Design a schema from scratch", tip:"Grain first, then facts, then dimensions"},
+  {id:"an-1", b:"an", w:3, n:"Excel: pivot tables", tip:"Rows, columns, values. It is GROUP BY with a mouse"},
+  {id:"an-2", b:"an", w:4, n:"Excel: lookups (XLOOKUP, VLOOKUP, INDEX-MATCH)", tip:"<code>=XLOOKUP(key, key_column, result_column)</code>"},
+  {id:"an-3", b:"an", w:5, n:"Statistics: mean, median and distributions", tip:"Outliers drag the mean. The median stays put"},
+  {id:"an-4", b:"an", w:5, n:"Statistics: correlation vs causation", tip:"Moving together does not mean one causes the other"},
+  {id:"an-5", b:"an", w:6, n:"Statistics: sampling and confidence intervals", tip:"52% ± 4% means somewhere from 48% to 56%"},
+  {id:"an-6", b:"an", w:6, n:"A/B testing: hypotheses and p-values", tip:"p-value = how surprising the result is if nothing really changed"},
+  {id:"an-7", b:"an", w:7, n:"A/B testing: sample size and reading results", tip:"Small samples lie. Decide the sample size before you start"},
+  {id:"an-8", b:"an", w:7, n:"Product metrics: conversion, retention, churn", tip:"Churn = customers lost / customers at the start"},
+  {id:"an-9", b:"an", w:8, n:"Business metrics: LTV, CAC and north star metrics", tip:"Healthy rule of thumb: LTV is about 3x CAC"},
+  {id:"an-10", b:"an", w:8, n:"Dashboards: choosing charts and telling a story", tip:"Headline number first, then the why"},
+  {id:"an-11", b:"an", w:9, n:"BI tools: Tableau and Power BI fundamentals", tip:"Dimensions slice, measures add up"},
+  {id:"an-12", b:"an", w:9, n:"Analytics cases: investigating a metric drop", tip:"Check the data, then segment, then find the cause"},
+  {id:"an-13", b:"an", w:10, n:"Analytics cases: metric design and trade-offs", tip:"One success metric, plus guardrails"},
   {id:"pr-1", b:"pr", w:3, n:"LeetCode SQL 50: easy problems", tip:"Warm-up set. Aim for speed and clean syntax"},
   {id:"pr-2", b:"pr", w:5, n:"DataLemur: easy and medium", tip:"Interview-style questions from real companies"},
   {id:"pr-3", b:"pr", w:6, n:"StrataScratch: medium problems", tip:"Real interview questions, filter by company"},
@@ -279,13 +296,15 @@ CREATE TABLE signups(user_id INTEGER, signup_date TEXT);
 INSERT INTO signups VALUES (1,'2026-01-03'),(2,'2026-01-15'),(3,'2026-01-28'),(4,'2026-02-02'),(5,'2026-02-11'),(6,'2026-02-25');
 CREATE TABLE activity(user_id INTEGER, activity_date TEXT);
 INSERT INTO activity VALUES (1,'2026-01-03'),(1,'2026-02-10'),(1,'2026-03-12'),(2,'2026-01-15'),(2,'2026-02-20'),(3,'2026-01-28'),(4,'2026-02-02'),(4,'2026-03-05'),(5,'2026-02-11'),(5,'2026-03-14'),(6,'2026-02-25'),(6,'2026-03-30');
+CREATE TABLE ab_test(user_id INTEGER, variant TEXT, converted INTEGER);
+INSERT INTO ab_test VALUES (1,'A',0),(2,'A',1),(3,'A',0),(4,'A',0),(5,'A',0),(6,'A',1),(7,'A',0),(8,'A',0),(9,'A',0),(10,'A',0),(11,'B',1),(12,'B',0),(13,'B',1),(14,'B',0),(15,'B',0),(16,'B',1),(17,'B',0),(18,'B',1),(19,'B',0),(20,'B',0);
 CREATE TABLE logs(id INTEGER PRIMARY KEY, payload TEXT);
 INSERT INTO logs VALUES (1,'{"user":"asha","device":"ios","amount":19.5}'),(2,'{"user":"ben","device":"android","amount":5}'),(3,'{"user":"carla","device":"ios","amount":42}'),(4,'{"user":"dev","device":"web","amount":10.25}'),(5,'{"user":"elena","device":"ios","amount":8}');
 `;
 const SCHEMA = {
   customers:"id, name, city, age, signup_date", orders:"id, customer_id, order_date, amount, status", products:"id, name, category, price",
   employees:"id, name, dept, salary, manager_id", monthly_revenue:"month, revenue", contacts:"id, email, updated_at",
-  events:"user_id, step, ts", signups:"user_id, signup_date", activity:"user_id, activity_date", logs:"id, payload"
+  events:"user_id, step, ts", signups:"user_id, signup_date", activity:"user_id, activity_date", logs:"id, payload", ab_test:"user_id, variant, converted"
 };
 
 /* ============ LESSON BUILDERS ============ */
@@ -504,6 +523,84 @@ const LESSONS = {
   say(`<span class="tag">Your turn to design</span><p>Recipe: <b>1.</b> choose the business process, <b>2.</b> declare the grain, <b>3.</b> list the numbers (measures), <b>4.</b> list the dimensions that describe each event. Sketch it on paper before writing any SQL.</p>`),
   mc({prompt:"A ride-share app wants to analyze trips. What is the best <b>fact table</b>?", opts:["fact_rides: one row per ride, with fare, distance, and keys to driver, rider, date, and location","dim_driver: one row per driver","A single huge table with every column of everything","fact_drivers: one row per driver per year only"], ans:0, why:"Rides are the events being measured. Driver, rider, date and location become the dimensions.", nudge:"Which one is an event with numbers attached?"})
 ]}
+/* ---------- ANALYTICS ---------- */
+,"an-1": {key:"A pivot table is GROUP BY you build by dragging: rows to group, values to total.", beats:[
+  say(`<span class="tag">Analogy</span><p>You have a shoebox of receipts again. This time you draw a grid on the table: one <b>row per city</b>, one <b>column per month</b>, and in each square you write the total. A pivot table draws that grid for you in seconds.</p>`),
+  terms([["Pivot table","a summary grid Excel builds from raw rows"],["Rows / Columns","the fields you group by, down the side and across the top"],["Values","the number being summarized, like Sum of amount or Count of orders"],["Slicer / Filter","a control that narrows the data the pivot uses"]]),
+  ex(`1. Click any cell in your data\n2. Insert > PivotTable\n3. Drag "city" to Rows\n4. Drag "amount" to Values (it becomes Sum of amount)\n5. Drag "month" to Columns for a grid`, {lang:"txt", run:false, note:"Raw data should be one row per record with a header on every column. No merged cells, no blank rows."}),
+  mc({prompt:"A pivot with <b>Rows = category</b> and <b>Values = Sum of sales</b> does the same job as which SQL?", opts:["SELECT category, SUM(sales) FROM t GROUP BY category","SELECT DISTINCT category FROM t","SELECT * FROM t ORDER BY category","SELECT category FROM t WHERE sales > 0"], ans:0, why:"Rows are the GROUP BY columns and Values are the aggregate.", nudge:"Which query makes one row per category with a total?"})
+]}
+,"an-2": {key:"A lookup fetches a value from another table by matching a key. It is a join in a cell.", beats:[
+  say(`<span class="tag">Analogy</span><p>A customer hands you an item code. You run your finger down the <b>catalog</b> until you find that code, then slide across to read the price. That finger movement is a lookup.</p>`),
+  terms([["Lookup","find a key in one column and return a value from another"],["XLOOKUP","the modern one: key, where to search, what to return"],["VLOOKUP","the older one. It can only return columns to the right of the key"],["INDEX-MATCH","a two-step combo that works in any direction and in older Excel"]]),
+  ex(`=XLOOKUP(A2, Products!A:A, Products!C:C, "Not found")\n\n=VLOOKUP(A2, Products!A:C, 3, FALSE)\n\n=INDEX(Products!C:C, MATCH(A2, Products!A:A, 0))`, {lang:"txt", run:false, note:"All three find the value of A2 in the Products sheet and return the price. Always ask for an exact match (FALSE or 0)."}),
+  mc({prompt:"A lookup that pulls a product's price onto every order row is most like which SQL idea?", opts:["A LEFT JOIN from orders to products","A UNION ALL of the two tables","A GROUP BY on price","A DISTINCT on product"], ans:0, why:"Every order row stays, and matching product details are attached. Unmatched keys come back empty, like NULLs.", nudge:"You are matching rows across two tables by a key."}),
+  mc({prompt:"Why do people replace VLOOKUP with XLOOKUP or INDEX-MATCH?", opts:["VLOOKUP only returns columns to the right of the key, and breaks when columns are inserted","VLOOKUP cannot handle numbers","VLOOKUP only works on one sheet","VLOOKUP always returns the last match"], ans:0, why:"VLOOKUP counts columns by position, so it is fragile, and it cannot look left.", nudge:"Think about that hard-coded column number 3."})
+]}
+,"an-3": {key:"Use the median when outliers exist. Always look at the spread, not just the center.", beats:[
+  say(`<span class="tag">Analogy</span><p>Five friends at a cafe earn about the same. A billionaire sits down. The <b>average</b> income at the table is now hundreds of millions, yet nobody got richer. The <b>median</b> (the middle person) barely moves.</p>`),
+  terms([["Mean","the average: add everything up and divide by the count"],["Median","the middle value when sorted. Half are above, half below"],["Outlier","a value far from the rest"],["Distribution","the shape of the data: where values cluster and how far they spread"],["Standard deviation","a number for how spread out values are around the mean"]]),
+  ex(`SELECT AVG(salary) AS mean_salary,\n       MIN(salary) AS lowest,\n       MAX(salary) AS highest\nFROM employees;`, {note:"A mean on its own hides the range. Always check the low, the high, and a chart of the distribution."}),
+  mc({prompt:"A town has mostly modest homes and a few mansions. Which number best describes a typical home price?", opts:["The median","The mean","The maximum","The sum"], ans:0, why:"The mansions pull the mean up, while the median still sits at a typical home.", nudge:"Remember the billionaire at the cafe."})
+]}
+,"an-4": {key:"Correlation says two things move together. Only an experiment shows one causes the other.", beats:[
+  say(`<span class="tag">Analogy</span><p>Ice cream sales and sunburns rise together every summer. Does ice cream cause sunburn? No. <b>Hot weather</b> causes both. That hidden third thing is the trap.</p>`),
+  terms([["Correlation","two measures tend to move together"],["Correlation coefficient (r)","a number from -1 to 1. Near 0 means no straight-line relationship"],["Causation","one thing actually produces a change in the other"],["Confounder","a hidden factor that drives both"]]),
+  mc({prompt:"Users who turn on notifications are retained more. What is the safest conclusion?", opts:["They are related, but engaged users may simply be more likely to turn them on. Test it with an experiment","Notifications cause retention, so force them on for everyone","Retention causes notifications","There is no relationship"], ans:0, why:"Already-engaged users may choose notifications. Only a randomized test separates cause from coincidence.", nudge:"Could a third factor explain both behaviors?"})
+]}
+,"an-5": {key:"A sample estimates the whole. The confidence interval tells you how far off it could be.", beats:[
+  say(`<span class="tag">Analogy</span><p>You taste <b>one spoonful</b> to judge a whole pot of soup. It works if you <b>stir first</b> (a random sample). A bigger spoon makes you more certain. A spoonful from the unstirred top misleads you (bias).</p>`),
+  terms([["Population","everyone you care about"],["Sample","the smaller group you actually measured"],["Random sample","everyone had an equal chance of being picked"],["Bias","a sample that systematically differs from the population"],["Confidence interval","a range that likely contains the true value"],["Margin of error","half the width of that range, the ± part"]]),
+  mc({prompt:"A survey reports that <b>52% ± 4%</b> of users prefer the new design. What can you say?", opts:["The true figure is likely between 48% and 56%, so a majority is not certain","Exactly 52% of all users prefer it","At least 56% prefer it","The survey is wrong by 4 users"], ans:0, why:"The interval dips below 50%, so you cannot claim a majority with confidence.", nudge:"Apply the ± to get the range, then look at where 50% falls."})
+]}
+,"an-6": {key:"A/B tests compare random groups. A small p-value means chance alone is an unlikely explanation.", beats:[
+  say(`<span class="tag">Analogy</span><p>A bakery tests a new cookie recipe. Random customers get the old cookie (A) or the new one (B). Like a <b>courtroom</b>, you start by assuming there is <b>no difference</b>, and only change your mind if the evidence is strong.</p>`),
+  terms([["Control / Variant","group A gets the current version, group B gets the change"],["Randomization","chance decides who gets which, so the groups are comparable"],["Null hypothesis","the starting assumption that the change does nothing"],["p-value","how often you would see a gap this big if the change truly did nothing"],["Significance level","the cutoff you set in advance, commonly 0.05"]]),
+  mc({prompt:"Your test returns <b>p = 0.03</b>. What does that mean?", opts:["If the change really did nothing, a gap this large would show up about 3% of the time","There is a 97% chance that B is better","B is 3% better than A","3% of users saw a bug"], ans:0, why:"The p-value describes how surprising the data is under 'no difference'. It is not the probability that B wins.", nudge:"Start from the courtroom assumption: no difference."})
+]}
+,"an-7": {key:"Set the sample size first, do not peek, and check the lift is big enough to matter.", beats:[
+  say(`<span class="tag">Analogy</span><p>Flip a coin 4 times and get 3 heads. Is the coin rigged? You cannot tell. Flip it 1,000 times and get 750 heads, and now you are sure. <b>Small samples swing wildly.</b></p>`),
+  terms([["Sample size","how many users each group needs, decided before the test"],["Statistical power","the chance your test detects a real effect"],["Peeking","stopping early because results look good, which inflates false wins"],["Practical significance","whether the lift is large enough to be worth shipping"],["Guardrail metric","something that must not get worse, like refunds or load time"]]),
+  ex(`SELECT variant,\n       COUNT(*)       AS users,\n       SUM(converted) AS conversions\nFROM ab_test\nGROUP BY variant;`),
+  sq({prompt:"Return each <b>variant</b> and its <b>conversion rate as a percentage</b>, sorted by variant.", tables:["ab_test"], ordered:true, sol:"SELECT variant, 100.0 * SUM(converted) / COUNT(*) AS rate FROM ab_test GROUP BY variant ORDER BY variant;", hint:"<code>100.0 * SUM(converted) / COUNT(*)</code>, grouped by variant. The 100.0 avoids whole-number division."}),
+  mc({prompt:"B converts at 40% and A at 20%, with <b>10 users each</b>. Should you ship B?", opts:["Not yet. With 10 users per group this gap could easily be luck. Keep running to the planned sample size","Yes, B doubled conversion","Yes, any difference is enough","No, A is the control so A wins"], ans:0, why:"Two extra conversions created that 'doubling'. It is the 3-heads-in-4-flips problem.", nudge:"Think about the coin flips."})
+]}
+,"an-8": {key:"Conversion measures who moves forward. Churn measures who leaks out. Retention is the opposite of churn.", beats:[
+  say(`<span class="tag">Analogy</span><p>Your product is a <b>bucket with a hole</b>. Water pouring in is new users. Water leaking out is churn. Pouring faster is expensive. Patching the hole (retention) is usually the smarter fix.</p>`),
+  terms([["Conversion rate","users who took the next step divided by users who could have"],["Retention","the share of users still active after a period"],["Churn rate","customers lost in a period divided by customers at the start"],["Active user (DAU, WAU, MAU)","someone who did a meaningful action that day, week or month"]]),
+  sq({prompt:"Using <code>events</code>, what <b>percentage of users who signed up went on to purchase</b>? Return one number.", tables:["events"], sol:"SELECT 100.0 * COUNT(DISTINCT CASE WHEN step='purchase' THEN user_id END) / COUNT(DISTINCT CASE WHEN step='signup' THEN user_id END) FROM events;", hint:"Same pattern as the funnel lesson: purchasers divided by signups, times 100.0."}),
+  mc({prompt:"You start the month with 200 customers and 10 cancel. What is the monthly churn rate?", opts:["5%","10%","2%","20%"], ans:0, why:"10 lost divided by 200 at the start is 5%.", nudge:"Lost customers divided by customers at the start."})
+]}
+,"an-9": {key:"A business works when a customer is worth much more (LTV) than it costs to win them (CAC).", beats:[
+  say(`<span class="tag">Analogy</span><p>A lemonade stand prints flyers. If it costs <b>$2 of flyers</b> to win one customer (CAC), and that customer buys <b>$10 of lemonade</b> over the summer (LTV), the stand is healthy. If it costs $12, every new customer loses money.</p>`),
+  terms([["CAC","Customer Acquisition Cost: sales and marketing spend divided by new customers"],["LTV","Lifetime Value: the total profit one customer brings over their whole relationship"],["LTV to CAC ratio","a common healthy target is around 3 to 1"],["North star metric","the one number that best captures the value customers get"],["Vanity metric","a number that looks good but does not guide decisions"]]),
+  mc({prompt:"You spent $5,000 on marketing and gained 100 new customers. What is CAC?", opts:["$50","$500","$5","$100"], ans:0, why:"$5,000 divided by 100 customers is $50 each.", nudge:"Spend divided by new customers."}),
+  mc({prompt:"Which is the clearest example of a <b>vanity metric</b>?", opts:["Total sign-ups since launch","Weekly active users","Month-3 retention","Revenue per customer"], ans:0, why:"All-time sign-ups can only go up, even while the product is dying. It does not tell you what to do.", nudge:"Which one can never go down?"})
+]}
+,"an-10": {key:"Lead with the headline number and its comparison. Pick the chart that fits the question.", beats:[
+  say(`<span class="tag">Analogy</span><p>A <b>car dashboard</b> shows only what the driver needs at a glance. Speed is the biggest dial. Nobody wants the engine manual taped to the windshield.</p>`),
+  terms([["KPI","Key Performance Indicator: a number the business tracks closely"],["Comparison","every number needs context: vs target, vs last period"],["Chart choice","line for trends over time, bar for comparing categories, histogram for spread, scatter for relationships"],["Clutter","anything on the screen that does not help a decision"]]),
+  mc({prompt:"You need to compare revenue across 5 regions for last quarter. Best chart?", opts:["Bar chart","Line chart","Pie chart with 5 thin slices","Scatter plot"], ans:0, why:"Bars make side-by-side comparison of categories easy. Lines suggest time order, which regions do not have.", nudge:"Regions are categories, not points in time."}),
+  mc({prompt:"What belongs at the very top of an executive dashboard?", opts:["A few headline KPIs, each compared to target or the previous period","A table of every transaction","The SQL used to build it","A long paragraph of methodology"], ans:0, why:"Executives ask 'are we okay?' first. Headline numbers with context answer that in seconds.", nudge:"Think of the speedometer."})
+]}
+,"an-11": {key:"BI tools are drag and drop on top of a data model. Dimensions slice, measures aggregate.", beats:[
+  say(`<span class="tag">Analogy</span><p>Tableau and Power BI are like <b>building blocks</b>. Each field is a brick. Snap a category brick and a number brick onto the canvas and a chart appears. The star schema you learned is the box the bricks come in.</p>`),
+  terms([["Dimension","a category you slice by, like region or product"],["Measure","a number that gets aggregated, like sum of sales"],["Filter / Slicer","a control the viewer uses to narrow the data"],["Calculated field","a formula you add. Power BI calls its formula language DAX"],["Relationships","links between tables in the model, usually fact to dimension keys"]]),
+  ex(`Tableau:   drag Region to Columns, SUM(Sales) to Rows\nPower BI:  add a bar chart, Region on the axis, Sales in values\nDAX:       Total Sales = SUM(Sales[amount])`, {lang:"txt", run:false}),
+  mc({prompt:"In a chart titled 'Sales by Region', what is <b>Region</b>?", opts:["A dimension","A measure","A filter only","A calculated field"], ans:0, why:"Region is the category you slice by. Sales is the measure being summed.", nudge:"Is Region something you add up, or something you group by?"})
+]}
+,"an-12": {key:"For any metric drop: check the data, pin down when, segment to find where, then explain why.", beats:[
+  say(`<span class="tag">Analogy</span><p>A good <b>doctor</b> does not guess. First: is the thermometer broken? Then: when did it start? Where exactly does it hurt? Only then: what caused it, and what is the treatment?</p>`),
+  say(`<span class="tag">The framework</span><p><b>1. Is the data right?</b> Tracking bugs and pipeline delays cause many "drops".</p><p><b>2. Define it.</b> Which metric exactly, and was the change sudden or gradual?</p><p><b>3. Segment.</b> Platform, region, new vs returning users, channel. Find where the drop lives.</p><p><b>4. Internal causes.</b> Releases, pricing changes, experiments, outages.</p><p><b>5. External causes.</b> Seasonality, holidays, competitors, news.</p><p><b>6. Recommend.</b> State the likely cause, your confidence, and the next step.</p>`),
+  mc({prompt:"Sign-ups dropped 10% overnight. What do you check <b>first</b>?", opts:["Whether tracking and the data pipeline are working correctly","Competitor pricing","Whether to redesign the homepage","Last year's marketing budget"], ans:0, why:"A sudden overnight change is often a logging or pipeline issue. Rule it out before chasing real causes.", nudge:"Is the thermometer broken?"}),
+  mc({prompt:"After segmenting, the drop is <b>only on Android</b> and began Tuesday. Best next step?", opts:["Look at what shipped on Android on Tuesday","Survey all users about satisfaction","Increase ad spend everywhere","Wait a month to see if it recovers"], ans:0, why:"A drop isolated to one platform with a clear start date points to a release. Check the change log.", nudge:"One platform, one start date. What changes on a specific day?"})
+]}
+,"an-13": {key:"Tie the metric to the goal, name one success metric, and add guardrails for what must not break.", beats:[
+  say(`<span class="tag">Analogy</span><p>A restaurant adds a new menu. Success is <b>more orders of the new dishes</b>. But the owner also watches <b>kitchen wait time</b>. If orders rise while waits double, the launch failed. That second number is a guardrail.</p>`),
+  say(`<span class="tag">The framework</span><p><b>1. Clarify the goal.</b> What is this feature for, and for whom?</p><p><b>2. Success metric.</b> One number that moves if the goal is met.</p><p><b>3. Guardrails.</b> Numbers that must not get worse.</p><p><b>4. How to measure.</b> Usually an A/B test, with the sample size set up front.</p><p><b>5. Decision rule.</b> What result means ship, iterate, or stop.</p>`),
+  mc({prompt:"A social app launches a 'Stories' feature to increase engagement. Best <b>success metric</b>?", opts:["Share of weekly active users who view or post a story","Total app downloads","Number of engineers on the project","Count of stories ever created since launch"], ans:0, why:"It measures real usage among active users and can go down, so it guides decisions.", nudge:"Which one reflects engagement with this feature, and is not a vanity number?"}),
+  mc({prompt:"Which is a sensible <b>guardrail</b> for that launch?", opts:["Time spent in the main feed and the app crash rate","The number of stories posted","The color of the Stories button","Total employees"], ans:0, why:"Stories should not cannibalize the core feed or make the app unstable.", nudge:"What could the new feature accidentally damage?"})
+]}
 };
 /*DATA_END*/
 
@@ -512,6 +609,7 @@ const BUCKETS = {
   sql:{label:"SQL", tab:"sql", blurb:"Lessons you can run right here. The coach explains, you try, the coach checks your answer."},
   py:{label:"Python", tab:"py", blurb:"Concept lessons with check-in questions. Practice the code in a notebook alongside."},
   dm:{label:"Data Modeling", tab:"dm", blurb:"How tables fit together: keys, facts, dimensions, schemas."},
+  an:{label:"Analytics", tab:"an", blurb:"Excel, statistics, A/B testing, metrics, dashboards and case questions."},
   pr:{label:"Practice", tab:"pr", blurb:"Reps on LeetCode, StrataScratch and DataLemur."}
 };
 const CATS = {
@@ -534,12 +632,13 @@ const ICON = {
   sql:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
   py:'<path d="M8 4c-2 0-3 1-3 3v2c0 1.5-1 3-3 3 2 0 3 1.5 3 3v2c0 2 1 3 3 3"/><path d="M16 4c2 0 3 1 3 3v2c0 1.5 1 3 3 3-2 0-3 1.5-3 3v2c0 2-1 3-3 3"/>',
   dm:'<path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/>',
+  an:'<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
   pr:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>',
   apps:'<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M9 8V5h6v3"/><path d="M3 13h18"/>',
   stats:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   settings:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4"/>'
 };
-const NAV = [["coach","Coach"],["today","Today"],["plan","Plan"],["sql","SQL"],["py","Python"],["dm","Modeling"],["pr","Practice"],["apps","Applications"],["stats","Stats"],["settings","Settings"]];
+const NAV = [["coach","Coach"],["today","Today"],["plan","Plan"],["sql","SQL"],["py","Python"],["dm","Modeling"],["an","Analytics"],["pr","Practice"],["apps","Applications"],["stats","Stats"],["settings","Settings"]];
 const AVATAR = '<div class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="M6 10.5V15c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/></svg></div>';
 
 const pad = n => String(n).padStart(2,"0");
@@ -662,9 +761,10 @@ const pick = a => a[Math.floor(Math.random()*a.length)];
 function openLesson(id){
   const t = byId[id]; LS = {id, idx:1, ch:{}, finished:false};
   S.tab = t.b; save(); render();
-  if(t.b==="sql") ensureSql().then(()=>render()).catch(()=>render());
+  if(needsSql(id)) ensureSql().then(()=>render()).catch(()=>render());
   window.scrollTo({top:0});
 }
+const needsSql = id => LESSONS[id].beats.some(b=>b.k==="sql" || (b.k==="ex" && b.lang==="sql" && b.run));
 const beatDone = i => { const b=LESSONS[LS.id].beats[i]; return (b.k==="sql"||b.k==="mc") ? !!(LS.ch[i] && LS.ch[i].passed) : true; };
 function maybeFinish(){
   const L = LESSONS[LS.id];
@@ -687,7 +787,7 @@ function resultTable(res){
   const cell = v => v===null ? `<span class="nl">NULL</span>` : esc(v);
   return `<div class="rt"><table><thead><tr>${res.columns.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${cell(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>${res.values.length>40?`<div class="more">Showing 40 of ${res.values.length} rows</div>`:""}</div>`;
 }
-function codeBlock(code, lang){ return `<pre><code>${hl(code, lang)}</code></pre>`; }
+function codeBlock(code, lang){ return `<pre${lang==="txt"?' style="white-space:pre-wrap"':""}><code>${lang==="txt"?esc(code):hl(code, lang)}</code></pre>`; }
 function tablesLine(list){
   return list&&list.length ? `<div class="tbls">Tables: ${list.map(t=>`<code>${t}</code>(${SCHEMA[t]})`).join(" · ")}</div>` : "";
 }
@@ -738,7 +838,7 @@ function mcChallengeHtml(i,b){
 }
 function viewLesson(){
   const t = byId[LS.id], L = LESSONS[LS.id], total = L.beats.length;
-  if(t.b==="sql" && !SQLMOD){
+  if(needsSql(LS.id) && !SQLMOD){
     return `<div class="card">${sqlFailed ? `<h3>The SQL engine could not load</h3><p class="muted">It downloads from a CDN the first time. Check your connection, then retry.</p><button class="btn primary" data-action="retrySql">Retry</button> <button class="btn" data-action="closeLesson">Back</button>` : `<h3>Warming up the practice database...</h3><p class="muted">One moment. It loads once, then works offline-fast.</p>`}</div>`;
   }
   const lt = lessonTask(LS.id,false);
@@ -755,7 +855,67 @@ function viewLesson(){
   } else if(LS.idx<total && beatDone(LS.idx-1)){
     h += `<div class="cont"><button class="btn primary" data-action="cont">Continue</button></div>`;
   }
-  return h;
+  return h + askPanel();
+}
+
+/* ============ ASK CLAUDE (opens claude.ai with context prefilled) ============ */
+const strip = h => { const d=document.createElement("div"); d.innerHTML=h; return (d.textContent||"").replace(/\s+/g," ").trim(); };
+const inLessonNow = () => !!(LS && byId[LS.id].b===S.tab);
+function askPanel(){
+  let extra = "";
+  if(inLessonNow()){
+    const i=LS.idx-1, b=LESSONS[LS.id].beats[i], st=LS.ch[i];
+    extra = `<button class="btn sm" data-action="ask" data-preset="Explain this idea again in a different way, with a new analogy.">Explain it another way</button><button class="btn sm" data-action="ask" data-preset="Give me one more practice question on this topic, slightly harder, and check my answer.">Another practice question</button>`;
+    if(b.k==="sql" && st && !st.passed) extra += `<button class="btn sm" data-action="ask" data-preset="Why is my query wrong? Give me a hint first, not the full answer.">Why is my query wrong?</button>`;
+  } else if(S.tab==="sql" && sqlView==="sandbox"){
+    extra = `<button class="btn sm" data-action="ask" data-preset="Explain what my query does, step by step.">Explain my query</button><button class="btn sm" data-action="ask" data-preset="Why is my query not working? Give me a hint first.">Fix my query</button>`;
+  }
+  return `<div class="card ask"><h3>${AVATAR}Have a question? Ask Claude</h3>
+    <p class="muted small" style="margin:6px 0 10px">Opens Claude in a new tab with ${inLessonNow()?"this lesson, your work and your question":"your question and your study plan"} already typed in. Just press send there.</p>
+    <div class="addrow" style="margin-top:0"><input type="text" id="ask-q" placeholder="Type your question" aria-label="Your question for Claude" data-enter="ask"><button class="btn coach" data-action="ask">Ask Claude</button></div>
+    ${extra?`<div class="row" style="margin-top:10px">${extra}</div>`:""}</div>`;
+}
+function buildAskPrompt(question){
+  const cut = (t,n) => t.length>n ? t.slice(0,n)+"…" : t;
+  let p = "You are my patient tutor for data analytics (SQL, Python, data modeling, analytics). Teaching rules: one concept at a time, start with a simple real-world analogy, define every technical term in plain English, keep it short, and end with one quick check-in question, then wait for my answer before moving on.\n\n";
+  if(inLessonNow()){
+    const t=byId[LS.id], L=LESSONS[LS.id], i=LS.idx-1, b=L.beats[i], st=LS.ch[i];
+    p += `I am studying: ${BUCKETS[t.b].label} - ${t.n}.\nKey idea of the lesson: ${L.key}\n`;
+    if(b.k==="sql"){
+      syncEditor(i);
+      p += `Current exercise: ${strip(b.prompt)}\n`;
+      if(b.tables) p += `Tables: ${b.tables.map(x=>x+"("+SCHEMA[x]+")").join("; ")}\nDatabase: SQLite.\n`;
+      if(st && st.val.trim()) p += `My query so far:\n${cut(st.val.trim(),500)}\n`;
+      if(st && st.err) p += `Error: ${cut(st.err,200)}\n`;
+      if(st && st.fb && !st.fb.ok) p += `Feedback I got: ${cut(strip(st.fb.msg),250)}\n`;
+    } else if(b.k==="mc"){
+      p += `Current check-in question: ${strip(b.prompt)}${b.code?"\n"+b.code:""}\n`;
+    }
+  } else if(S.tab==="sql" && sqlView==="sandbox"){
+    const ta=document.getElementById("sb"); if(ta) SB.sql=ta.value;
+    p += `I am practicing SQL in a SQLite sandbox.\nMy query:\n${cut(SB.sql.trim(),500)}\n`;
+    if(SB.err) p += `Error: ${cut(SB.err,200)}\n`;
+  } else {
+    const nx=nextLessons(1)[0];
+    p += `I am on a 10-week self-study plan${nx?`. My next topic is: ${nx.n}`:""}.\n`;
+  }
+  p += `\nMy question: ${question}`;
+  return p;
+}
+function toast(text){
+  document.querySelectorAll(".toast").forEach(x=>x.remove());
+  const d=document.createElement("div"); d.className="toast"; d.setAttribute("role","status"); d.textContent=text; document.body.appendChild(d);
+  setTimeout(()=>d.remove(), 5000);
+}
+function doAsk(preset){
+  const inp=document.getElementById("ask-q");
+  const q = preset || (inp && inp.value.trim()) || (inLessonNow() ? "Explain this idea again in a different way, with a new analogy." : "");
+  if(!q){ if(inp) inp.focus(); toast("Type your question first."); return; }
+  const prompt = buildAskPrompt(q);
+  window.open("https://claude.ai/new?q="+encodeURIComponent(prompt), "_blank", "noopener");
+  try{ navigator.clipboard.writeText(prompt).then(()=>toast("Opening Claude. Your question is also copied, so paste it if the box is empty."), ()=>toast("Opening Claude in a new tab.")); }
+  catch(e){ toast("Opening Claude in a new tab."); }
+  if(inp) inp.value="";
 }
 
 /* ============ VIEWS ============ */
@@ -789,6 +949,7 @@ function viewCoach(){
   </div>
   <div class="card" style="margin-top:14px"><h3 style="margin-bottom:6px">Up next</h3>${nxt.length? nxt.map(topicRow).join("") : `<p class="empty">Nothing left. Nice.</p>`}</div>
   ${struggled.length?`<div class="card" style="margin-top:14px"><h3 style="margin-bottom:2px">Worth a second look</h3><p class="muted small" style="margin:0 0 4px">These took several tries. Replaying them is the fastest way to lock them in.</p>${struggled.map(topicRow).join("")}</div>`:""}
+  ${askPanel()}
   <div class="card" style="margin-top:14px"><h3>How the coach teaches</h3><p class="muted" style="margin:6px 0 0">Every lesson is one small idea: a real-world analogy, the terms in plain English, a worked example, then a challenge you solve. You get feedback after every attempt, hints when you ask, and the solution after two misses. SQL runs against a practice database right in your browser.</p></div>`;
 }
 function viewToday(){
@@ -848,7 +1009,7 @@ function viewSandbox(){
     <div class="row" style="margin-bottom:8px">${chips}</div>
     <div class="editor" style="margin:0"><textarea id="sb" data-input="sb" spellcheck="false" style="min-height:150px" aria-label="Sandbox SQL">${esc(SB.sql)}</textarea><div class="row"><button class="btn primary" data-action="sbRun">Run</button></div></div>
     <div style="margin-top:6px">${SB.err?`<div class="err" style="margin-left:0">${esc(SB.err)}</div>`:""}${SB.res?resultTable(SB.res).replace('class="rt"','class="rt" style="margin-left:0"'):""}</div>
-    <div class="tbls" style="margin-top:12px">${Object.entries(SCHEMA).map(([t,c])=>`<div><code>${t}</code> (${c})</div>`).join("")}</div></div>`;
+    <div class="tbls" style="margin-top:12px">${Object.entries(SCHEMA).map(([t,c])=>`<div><code>${t}</code> (${c})</div>`).join("")}</div></div>${askPanel()}`;
 }
 function viewPractice(){
   const counters=PRACTICE_SITES.map(s=>{ const n=S.practice[s.id]||0;
@@ -887,7 +1048,7 @@ function viewSettings(){
 }
 
 /* ============ SHELL + RENDER ============ */
-const TITLES = {coach:["Coach","Learn one small idea at a time."],today:["Today","Your day, hour by hour."],plan:["10-week plan","Every topic, week by week."],sql:["SQL",""],py:["Python",""],dm:["Data modeling",""],pr:["Practice",""],apps:["Applications","Track every role you go after."],stats:["Stats","Where your time actually went."],settings:["Settings",""]};
+const TITLES = {coach:["Coach","Learn one small idea at a time."],today:["Today","Your day, hour by hour."],plan:["10-week plan","Every topic, week by week."],sql:["SQL",""],py:["Python",""],dm:["Data modeling",""],an:["Analytics",""],pr:["Practice",""],apps:["Applications","Track every role you go after."],stats:["Stats","Where your time actually went."],settings:["Settings",""]};
 function render(){
   document.documentElement.dataset.theme = S.theme || "";
   if(!S.theme) delete document.documentElement.dataset.theme;
@@ -903,7 +1064,7 @@ function render(){
   let body;
   const inLesson = LS && byId[LS.id].b===S.tab;
   if(inLesson) body = viewLesson();
-  else body = ({coach:viewCoach,today:viewToday,plan:viewPlan,sql:()=>viewBucket("sql"),py:()=>viewBucket("py"),dm:()=>viewBucket("dm"),pr:viewPractice,apps:viewApps,stats:viewStats,settings:viewSettings}[S.tab]||viewCoach)();
+  else body = ({coach:viewCoach,today:viewToday,plan:viewPlan,sql:()=>viewBucket("sql"),py:()=>viewBucket("py"),dm:()=>viewBucket("dm"),an:()=>viewBucket("an"),pr:viewPractice,apps:viewApps,stats:viewStats,settings:viewSettings}[S.tab]||viewCoach)();
   const inner=document.getElementById("inner"); inner.innerHTML = head + body;
   if(S.tab==="sql" && sqlView==="sandbox" && !SQLMOD && !inLesson) ensureSql().then(()=>{}).catch(()=>{});
   tick();
@@ -986,6 +1147,7 @@ document.addEventListener("click", e=>{
     case "sqlView": sqlView=el.dataset.v; render(); break;
     case "sbTable": SB.sql=`SELECT * FROM ${el.dataset.t};`; SB.res=null; SB.err=null; render(); if(SQLMOD) runSandbox(); break;
     case "sbRun": runSandbox(); break;
+    case "ask": doAsk(el.dataset.preset); break;
   }
 });
 function syncEditor(i){ const ta=document.getElementById("ed-"+i); if(ta) LS.ch[i].val=ta.value; }
@@ -1028,6 +1190,7 @@ document.addEventListener("keydown", e=>{
   const el=e.target.closest("[data-enter]"); if(!el) return;
   if(el.dataset.enter==="addTask") addTask(el.dataset.cat);
   if(el.dataset.enter==="addApp") addApp();
+  if(el.dataset.enter==="ask") doAsk();
 });
 function addTask(cat){
   const inp=document.getElementById("new-"+cat), mins=document.getElementById("min-"+cat), title=inp.value.trim();
